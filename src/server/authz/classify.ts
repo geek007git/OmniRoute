@@ -2,6 +2,7 @@ import {
   isPublicApiRoute,
   isPublicReadonlyCorsRoute,
 } from "../../shared/constants/publicApiRoutes";
+import { isLocalOnlyPath } from "./routeGuard";
 import type { ClassificationReason, RouteClassification } from "./types";
 
 const CLIENT_API_ALIAS_PREFIXES: ReadonlyArray<{ alias: string; canonical: string }> = [
@@ -9,6 +10,10 @@ const CLIENT_API_ALIAS_PREFIXES: ReadonlyArray<{ alias: string; canonical: strin
   { alias: "/responses", canonical: "/api/v1/responses" },
   { alias: "/models", canonical: "/api/v1/models" },
 ];
+
+const SELF_AUTH_PUBLIC_LOCAL_ONLY_PATHS: ReadonlySet<string> = new Set([
+  "/api/skills/collect/chaos",
+]);
 
 function normalizePathname(rawPath: string): { path: string; reason?: ClassificationReason } {
   let path = rawPath || "/";
@@ -109,7 +114,18 @@ export function classifyRoute(rawPath: string, method: string = "GET"): RouteCla
   }
 
   if (normalizedPath.startsWith("/api/")) {
-    if (isClassifiedAsPublic(normalizedPath, method)) {
+    // A LOCAL_ONLY (Tier 1) route must NEVER be classified PUBLIC, even when it
+    // sits under a PUBLIC prefix (e.g. /api/oauth/cursor/auto-import under the
+    // public /api/oauth/ prefix). The loopback gate + manage-scope bypass that
+    // enforce LOCAL_ONLY live ONLY in the MANAGEMENT policy; the PUBLIC policy
+    // allows anonymous unconditionally, so a PUBLIC classification silently
+    // makes a spawn-capable route reachable by anyone (the routeGuard.ts entry
+    // becomes dead code). Route it to MANAGEMENT so the Tier 1 gate applies.
+    if (
+      (!isLocalOnlyPath(normalizedPath, method) ||
+        isSelfAuthPublicLocalOnlyPath(normalizedPath, method)) &&
+      isClassifiedAsPublic(normalizedPath, method)
+    ) {
       return {
         routeClass: "PUBLIC",
         reason: matchesReadonlyPublic(normalizedPath, method)
@@ -141,4 +157,8 @@ function matchesReadonlyPublic(path: string, method: string): boolean {
 
 function isClassifiedAsPublic(path: string, method: string): boolean {
   return isPublicApiRoute(path, method);
+}
+
+function isSelfAuthPublicLocalOnlyPath(path: string, method: string): boolean {
+  return method.toUpperCase() === "POST" && SELF_AUTH_PUBLIC_LOCAL_ONLY_PATHS.has(path);
 }

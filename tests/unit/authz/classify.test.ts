@@ -184,6 +184,42 @@ const cases: Case[] = [
     expectedClass: "PUBLIC",
   },
   {
+    // Regression: /api/oauth/cursor/auto-import is a LOCAL_ONLY (spawn-capable)
+    // route listed in LOCAL_ONLY_API_PREFIXES. It sits under the PUBLIC
+    // /api/oauth/ prefix, so before the fix it classified PUBLIC and was
+    // reachable anonymously, leaking the operator's Cursor session token
+    // (PR #5070 claimed it was loopback-gated; it was dead code). It MUST
+    // classify MANAGEMENT so the Tier 1 loopback gate applies.
+    name: "/api/oauth/cursor/auto-import is LOCAL_ONLY, not PUBLIC",
+    path: "/api/oauth/cursor/auto-import",
+    method: "GET",
+    expectedClass: "MANAGEMENT",
+  },
+  {
+    name: "/api/skills/collect/detect is LOCAL_ONLY, not PUBLIC",
+    path: "/api/skills/collect/detect",
+    method: "GET",
+    expectedClass: "MANAGEMENT",
+  },
+  {
+    name: "/api/skills/collect/install is LOCAL_ONLY, not PUBLIC",
+    path: "/api/skills/collect/install",
+    method: "POST",
+    expectedClass: "MANAGEMENT",
+  },
+  {
+    name: "/api/skills/collect/chaos POST stays PUBLIC because handler self-authenticates",
+    path: "/api/skills/collect/chaos",
+    method: "POST",
+    expectedClass: "PUBLIC",
+  },
+  {
+    name: "/api/skills/collect/chaos GET is not the self-auth public dispatch method",
+    path: "/api/skills/collect/chaos",
+    method: "GET",
+    expectedClass: "MANAGEMENT",
+  },
+  {
     name: "/api/sync/bundle is PUBLIC",
     path: "/api/sync/bundle",
     method: "POST",
